@@ -80,15 +80,66 @@ def propose_meeting():
 	app.logger.debug("Entering propose_meeting")
 	return render_template('propose_meeting.html')
 
-@app.route("/respond")
-def respond():
+@app.route("/respond/<meeting_id>")
+def respond(meeting_id):
 	app.logger.debug("Entering respond")
+	
+	meeting_id = ObjectId(meeting_id)
+	meeting = proposal_collection.find_one( {"_id":meeting_id} )
+	meeting['_id'] = str(meeting['_id'])
+	flask.session['current_meeting'] = meeting
+	flask.session['daterange'] = meeting['start_date'] + " - " + meeting['end_date']
+	flask.session['begin_time'] = arrow.get(meeting['start_time'], "HH:mm").replace(tzinfo=tz.tzlocal()).isoformat().split("T")[1]
+	flask.session['end_time'] = arrow.get(meeting['end_time'], "HH:mm").replace(tzinfo=tz.tzlocal()).isoformat().split("T")[1]
+	
 	return render_template('respond.html')
 	
 @app.route("/view_meeting/<meeting_id>")
 def view_meeting(meeting_id):
 	app.logger.debug("Entering view_meeting")
-	app.logger.debug(meeting_id)
+	
+	#if 'current_meeting' in flask.session:
+	#	return flask.session['current_meeting']
+		
+	meeting_id = ObjectId(meeting_id)
+	meeting = proposal_collection.find_one( {"_id":meeting_id} )
+	meeting['_id'] = str(meeting['_id'])
+	flask.session['current_meeting'] = meeting
+	flask.session['daterange'] = meeting['start_date'] + " - " + meeting['end_date']
+	flask.session['begin_time'] = arrow.get(meeting['start_time'], "HH:mm").replace(tzinfo=tz.tzlocal()).isoformat().split("T")[1]
+	flask.session['end_time'] = arrow.get(meeting['end_time'], "HH:mm").replace(tzinfo=tz.tzlocal()).isoformat().split("T")[1]
+	
+	names = []
+	
+	busy_times = busy_collection.find( {"proposal_ID": meeting_id} )
+	for record in busy_times:
+		if record['name'] not in names:
+			names.append(record['name'])
+	
+	flask.session['names'] = names
+	
+	busy = []
+	available = []
+	
+	busy_times = busy_collection.find( {"proposal_ID": meeting_id} )
+	for record in busy_times:
+		start = arrow.get(record['start']).replace(tzinfo=tz.tzlocal()).isoformat()
+		end = arrow.get(record['end']).replace(tzinfo=tz.tzlocal()).isoformat()
+		busy.append([start, end])
+	print(busy)
+	start_date, end_date = flask.session['daterange'].split(" - ")
+	time_range_start = arrow.get(start_date + flask.session['begin_time'], "MM/DD/YYYYHH:mm:ssZZ")
+	time_range_end = arrow.get(start_date + flask.session['end_time'], "MM/DD/YYYYHH:mm:ssZZ")
+	end_date = arrow.get(end_date, "MM/DD/YYYY")
+	
+	range = arrow.Arrow.span_range('day', time_range_start, end_date)
+	for day in range:
+		available.extend(determine_free_times(busy, time_range_start.isoformat(), time_range_end.isoformat()))
+		time_range_start = time_range_start.replace(days=+1)
+		time_range_end = time_range_end.replace(days=+1)
+	
+	flask.session['available_times'] = available
+	
 	return render_template('view_meeting.html')	
 	
 @app.route("/respond_gcal")
@@ -173,37 +224,6 @@ def submit_busy_times():
 	return jsonify(result={})
 	
 
-@app.route("/_set_meeting")
-def set_meeting():
-	'''
-	Sets the flask session object
-	'''
-	app.logger.debug("Entering set_meeting, AJAX handler")
-	meeting_id = request.args.get("meeting_id", type=str)
-	
-	meeting_id = ObjectId(meeting_id)
-	meeting = proposal_collection.find_one( {"_id":meeting_id} )
-	meeting['_id'] = str(meeting['_id'])
-	flask.session['current_meeting'] = meeting
-	return jsonify(result={})
-
-@app.route("/_get_meeting_data")
-def get_meeting_data():
-	app.logger.debug("Entering get_meeting_data, AJAX handler")
-	meeting_id = request.args.get("meeting_id", type=str)
-	
-	#if 'current_meeting' in flask.session:
-	#	return flask.session['current_meeting']
-		
-	meeting_id = ObjectId(meeting_id)
-	meeting = proposal_collection.find_one( {"_id":meeting_id} )
-	meeting['_id'] = str(meeting['_id'])
-	flask.session['current_meeting'] = meeting
-	flask.session['daterange'] = meeting['start_date'] + " - " + meeting['end_date']
-	flask.session['begin_time'] = arrow.get(meeting['start_time'], "HH:mm").replace(tzinfo=tz.tzlocal()).isoformat().split("T")[1]
-	flask.session['end_time'] = arrow.get(meeting['end_time'], "HH:mm").replace(tzinfo=tz.tzlocal()).isoformat().split("T")[1]
-	return jsonify(result=meeting)
-
 @app.route("/_delete_meetings")
 def delete_meetings():
 	app.logger.debug("Entering delete_meetings, AJAX handler")
@@ -214,8 +234,7 @@ def delete_meetings():
 	for id in meeting_ids:
 		if id == "":
 			continue
-		id = ObjectId(id)
-		#proposal = proposal_collection.find( {"_id": id} )
+		id = ObjectId(id)		
 		proposal_collection.delete_one( {"_id": id} )
 		busy_collection.delete_many( {"proposal_ID": id} )
 	

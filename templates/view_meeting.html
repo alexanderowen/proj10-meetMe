@@ -25,96 +25,61 @@
 
 
 
-  Title: <input type="text" id="title" size=50 placeholder="Meeting title" readonly><br><br>
-  Proposer: <input type="text" id="proposer" placeholder="Your name" readonly><br><br>
-  Description: <textarea id="desc" rows=4 cols=50 placeholder="Details, location, etc. (optional)" readonly></textarea><br><br>
+  Title: <input type="text" id="title" size=50 value="{{session.current_meeting.title}}" readonly><br><br>
+  Proposer: <input type="text" id="proposer" value="{{session.current_meeting.proposer_name}}" readonly><br><br>
+  Description: <textarea id="desc" rows=4 cols=50 readonly>{{session.current_meeting.desc}}</textarea><br><br>
 
-  Date Range: <input type="text" id="daterange" size="24" readonly>
+  Date Range: <input type="text" id="daterange" size="24" value="{{session.current_meeting.start_date}} - {{session.current_meeting.end_date}}"readonly>
 
   <br><br>
   
-  Between <input type="time" id="begin_time" readonly>  and  <input type="time" id="end_time" readonly>
+  Between <input type="time" id="begin_time" value="{{session.current_meeting.start_time}}" readonly>  and  <input type="time" id="end_time" value="{{session.current_meeting.end_time}}" readonly>
 <br><br>
 <hr>
 Send this link to invitees: <input type="text" size="60" id="invite_link" value="" readonly>
 
 <h3>Respondents so far: </h3>
 {% if session.names is defined %}
-  <h3>names is defined</h3>
+  {% for name in session.names %}
+    <div class="row">
+      <div class="col-md-4">
+        {{ name }}
+      </div>
+    </div>
+  {% endfor %}
+{% else %}
+    <div class="row">
+      <div class="col-md-4">
+        No respondents so far.
+      </div>
+    </div>
 {% endif %}
 
-
+<h3>List of the current non-conflicting times:</h3>
+{% if session.available_times is defined %}
+  {% if session.available_times is equalto []%}
+      <div class="row">
+      <div class="col-md-4">
+        There are not non-conflicting times. : (
+      </div>
+    </div>
+  {% else %}
+    {% for start, end in session.available_times %}
+      <div class="row">
+      <div class="col-md-4">
+        {{ start }} {{ end }}
+      </div>
+    </div>    
+    
+    {% endfor %}
+  {% endif %}
+{% endif %}
 
 </div>  <!-- end container (for bootstrap) -->
 </body> 
 
 <script>
-    //this function will take the window.location.search string of ?name=val and
-    //create an object like {'name':'val'}
-    var parseUrl = function(urlParams) {
-        var retObj = {};
-        var urlParameters = null;
-
-        if (!urlParams || urlParams.length == 0) {return retObj}
-        if (urlParams.charAt(0) == '?') {
-            urlParameters = urlParams.substring(1);
-        }else {
-            urlParameters = urlParams;
-        }
-        if (urlParameters.length == 0) {return retObj}
-        var parameterPairs = urlParameters.split('&');
-        var x;
-        for (x in parameterPairs) {
-            var parameterPair = parameterPairs[x];
-            parameterPair = parameterPair.split('=');
-            retObj[parameterPair[0]] = parameterPair[1];
-        }
-        return retObj;
-    };
-    
-    var setMeetingData = function(id) {
-    	$.getJSON('/_get_meeting_data', 
-    		{meeting_id : id},
-    		function(data) {
-    			var result = data.result;
-    			$("#title").val(result.title);
-    			$("#proposer").val(result.proposer_name);
-    			$("#desc").val(result.desc);
-    			$("#daterange").val(result.start_date + " - " + result.end_date);
-    			$("#begin_time").val(result.start_time);
-    			$("#end_time").val(result.end_time);
-    		}
-    	);	
-    };
-    
-    var getNamesTimes = function(id) {
-    	$.getJSON('/_get_names_times',
-    		{meeting_id: id},
-    		function(data) {
-    			// window.location.reload()
-    			/*
-    			var result = data.result;
-    			console.log(result)
-    			names = result['names'];
-    			console.log(names)
-    			for (var i = 0; i < names.length; i++) {
-    				$("#names").val( $("#names") + names[i] + "\n" );
-    			
-    			}
-    			*/
-    		});
-    };
-    
-    window.onload = function () {
-    	args = parseUrl(window.location.search);
-    	meeting_id = args['id']
-    	
-    	$("#invite_link").val(window.location.href.replace("view_meeting","respond"));
-    	
-    	setMeetingData(meeting_id)
-    	getNamesTimes(meeting_id)
-    };
-
+$("#invite_link").val(window.location.href.replace("view_meeting","respond"));
 
 </script>
 </html>
