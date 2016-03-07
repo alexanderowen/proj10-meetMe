@@ -1,0 +1,120 @@
+<!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML//EN">
+<html lang="en"> <head>
+<title>View Meeting</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<!-- Include Required Prerequisites -->
+<script type="text/javascript" src="//cdn.jsdelivr.net/jquery/1/jquery.min.js"></script>
+<script type="text/javascript" src="//cdn.jsdelivr.net/momentjs/latest/moment.min.js"></script>
+<link rel="stylesheet" type="text/css" href="//cdn.jsdelivr.net/bootstrap/latest/css/bootstrap.css" />
+
+<!-- Include Date Range Picker -->
+<script type="text/javascript" src="//cdn.jsdelivr.net/bootstrap.daterangepicker/2/daterangepicker.js"></script>
+<link rel="stylesheet" type="text/css" href="//cdn.jsdelivr.net/bootstrap.daterangepicker/2/daterangepicker.css" />
+ 
+<!-- Our own style sheet -->
+<link rel="stylesheet" href="/static/css/busy.css" />
+
+</head>
+
+
+<body>
+<div class="container">
+
+<h1>View Meeting</h1>
+
+
+
+  Title: <input type="text" id="title" size=50 placeholder="Meeting title" readonly><br><br>
+  Proposer: <input type="text" id="proposer" placeholder="Your name" readonly><br><br>
+  Description: <textarea id="desc" rows=4 cols=50 placeholder="Details, location, etc. (optional)" readonly></textarea><br><br>
+
+  Date Range: <input type="text" id="daterange" size="24" readonly>
+
+  <br><br>
+  
+  Between <input type="time" id="begin_time" readonly>  and  <input type="time" id="end_time" readonly>
+<br><br>
+<hr>
+Send this link to invitees: <input type="text" size="60" id="invite_link" value="" readonly>
+
+<h3>Respondents so far: </h3>
+{% if session.names is defined %}
+  <h3>names is defined</h3>
+{% endif %}
+
+
+
+</div>  <!-- end container (for bootstrap) -->
+</body> 
+
+<script>
+    //this function will take the window.location.search string of ?name=val and
+    //create an object like {'name':'val'}
+    var parseUrl = function(urlParams) {
+        var retObj = {};
+        var urlParameters = null;
+
+        if (!urlParams || urlParams.length == 0) {return retObj}
+        if (urlParams.charAt(0) == '?') {
+            urlParameters = urlParams.substring(1);
+        }else {
+            urlParameters = urlParams;
+        }
+        if (urlParameters.length == 0) {return retObj}
+        var parameterPairs = urlParameters.split('&');
+        var x;
+        for (x in parameterPairs) {
+            var parameterPair = parameterPairs[x];
+            parameterPair = parameterPair.split('=');
+            retObj[parameterPair[0]] = parameterPair[1];
+        }
+        return retObj;
+    };
+    
+    var setMeetingData = function(id) {
+    	$.getJSON('/_get_meeting_data', 
+    		{meeting_id : id},
+    		function(data) {
+    			var result = data.result;
+    			$("#title").val(result.title);
+    			$("#proposer").val(result.proposer_name);
+    			$("#desc").val(result.desc);
+    			$("#daterange").val(result.start_date + " - " + result.end_date);
+    			$("#begin_time").val(result.start_time);
+    			$("#end_time").val(result.end_time);
+    		}
+    	);	
+    };
+    
+    var getNamesTimes = function(id) {
+    	$.getJSON('/_get_names_times',
+    		{meeting_id: id},
+    		function(data) {
+    			// window.location.reload()
+    			/*
+    			var result = data.result;
+    			console.log(result)
+    			names = result['names'];
+    			console.log(names)
+    			for (var i = 0; i < names.length; i++) {
+    				$("#names").val( $("#names") + names[i] + "\n" );
+    			
+    			}
+    			*/
+    		});
+    };
+    
+    window.onload = function () {
+    	args = parseUrl(window.location.search);
+    	meeting_id = args['id']
+    	
+    	$("#invite_link").val(window.location.href.replace("view_meeting","respond"));
+    	
+    	setMeetingData(meeting_id)
+    	getNamesTimes(meeting_id)
+    };
+
+
+</script>
+</html>

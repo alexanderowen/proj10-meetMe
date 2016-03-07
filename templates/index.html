@@ -1,18 +1,13 @@
 <!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML//EN">
 <html lang="en"> <head>
-<title>Appointments</title>
+<title>Meet Me App</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-
 
 <!-- Include Required Prerequisites -->
 <script type="text/javascript" src="//cdn.jsdelivr.net/jquery/1/jquery.min.js"></script>
 <script type="text/javascript" src="//cdn.jsdelivr.net/momentjs/latest/moment.min.js"></script>
 <link rel="stylesheet" type="text/css" href="//cdn.jsdelivr.net/bootstrap/latest/css/bootstrap.css" />
  
-<!-- Include Date Range Picker -->
-<script type="text/javascript" src="//cdn.jsdelivr.net/bootstrap.daterangepicker/2/daterangepicker.js"></script>
-<link rel="stylesheet" type="text/css" href="//cdn.jsdelivr.net/bootstrap.daterangepicker/2/daterangepicker.css" />
-
 <!-- Our own style sheet -->
 <link rel="stylesheet" href="/static/css/busy.css" />
 
@@ -22,165 +17,59 @@
 <body>
 <div class="container">
 
-<h1>Free times</h1>
-<h4>Select a date and time range below to determine your available times.</h4>
+<h1>Meet Me Proposer Application</h1>
+<h4>Current Proposals</h4>
 
-<!--
-  If there are any warnings or other messages from a prior action,
-  they appear above the rest of the content, just until the next 
-  action.
-  -->
-{% with messages = get_flashed_messages() %}
-  {% if messages %}
-    <ul class=flashes>
-    {% for message in messages %}
-      <li>{{ message }}</li>
-    {% endfor %}
-    </ul>
-  {% endif %}
-{% endwith %}
-
-<h2>Date range</h2>
-  <form action="/setrange" method="post">
-  <input type="text" name="daterange" size="12"
-    {% if session.daterange is defined %}
-         value="{{session.daterange}}"
-    {% endif %}
-     class="pull-down"
-     style="background: white; color:black ; cursor: pointer; padding: 5px 10px;
-     border: 1px solid white; width: 14em" >
-  <script type="text/javascript">
-  $(function() {
-  $('input[name="daterange"]').daterangepicker(
-    {    ranges: {
-           'Today': [moment(), moment()],
-           'Tomorrow':[moment().add(1, 'days'),
-                       moment().add(1, 'days')], 
-           'This week':[moment(), moment().endOf('week')],
-           'Next week':[moment().add(7, 'days').startOf('week'),
-                        moment().add(7, 'days').endOf('week')],
-           'This month':[moment(), moment().endOf('month')],
-           'Within two weeks':[moment(),moment().add(15, 'days')]
-        }}
-       );
-    });
-  </script>
-  
-  
-<h2>Time range</h2>
-  <h5>From</h3>
-    <input type="time" name="begintime"></input>    
-  <br>
-  <h5>To</h3>
-    <input type="time" name="endtime"></input>
-<br><br>
-
-<label>
-<input type="submit" value="I want this date and time"></input>
-</label>
-</form>
-
-{% if session.daterange is defined %}
-<h3>Current Date Range and Times</h3>
-{{ session.daterange }} <br>
-{{ session.begin_time | fmttime }} - {{ session.end_time | fmttime}}
-{% endif %}
-
-
-{% if session.calendars is defined  %}
-  <h3>Please select the calendar(s) you would like to use: </h3>
-  {% for cal in session.calendars if cal.selected %}
+{% if session.proposals is defined  %}
+  {% for proposal in session.proposals %}
   <div class="row">  
     <div class="col-md-4">
-        <input type="checkbox" id="{{ loop.index0 }}"> {{ cal.summary }}   
+        <input type="checkbox" id="{{ proposal._id }}">
+        <a href="view_meeting?id={{ proposal._id }}">{{ proposal.title }}</a>
     </div>
-    {% if loop.index is divisibleby 3 %}
-      </div> <div class="row">
-    {% endif %}  
   </div>  
   
   {% if loop.last %}
   <br>
-  <input type="submit" id="submitCalendarsButton" value="I want to use these calendars"></input>
-  {% endif %}
-  
+  <input type="submit" id="deleteProposalButton" value="Delete selected proposals">
+  <br>
+  {% endif %}  
   {% endfor %}
+{% else %}
+  
+    No meetings have been proposed.
+    <br>
+  
 {% endif %}
+
 
 <br>
+<input type="submit" id="createProposalButton" value="Propose new meeting">
 
-{% if session.free_times is defined  %}
-<h3>Here are your free times</h3>
-  {% for cal in session.free_times %}
-    {% for name, free_block in cal.items() %}
-    
-      {% if loop.first %}
-        <div class="row">
-          <h4>{{ name }}</h4>
-        </div>
-      {% endif %}
-    
-      {% for free_time in free_block %}  
-        <div class="row">
-      	{% for time in free_time %} 
-      	  {% if loop.first %}       
-           {{ time | fmtdatetime }} -
-          {% else %}
-           {{ time | fmttime }} 
-          {% endif %}       
-        {% endfor %}
-        </div>
-      {% endfor %}    
-    {% endfor %}
-  {% endfor %}
-{% endif %}
-
-
-{% if session.busy_times is defined  %}
-<h3>Here are your busy times</h3>
-  {% for cal in session.busy_times %}
-    {% for name, conflicts in cal.items() %}
-    
-      {% if loop.first %}
-        <div class="row">
-          <h4>{{ name }}</h4>
-        </div>
-      {% endif %}
-    
-      {% for conflict in conflicts %}  
-        <div class="row">
-      	{% for time in conflict %} 
-      	  {% if loop.first %}       
-           {{ time | fmtdatetime }} -
-          {% else %}
-           {{ time | fmttime }} 
-          {% endif %}       
-        {% endfor %}
-        </div>
-      {% endfor %}    
-    {% endfor %}
-  {% endfor %}
-{% endif %}
 
 
 </div>  <!-- end container (for bootstrap) -->
 </body> 
 
 <script>
-// Get the ids (indices) of the calendars selected, send them to the server
-$("#submitCalendarsButton").click( function() {	
+$("#deleteProposalButton").click( function() {
 	var checked = $("input:checked");
 	var ids = "";
+	
 	for (var i = 0; i < checked.length; i++) {
-		ids += checked[i].id;
+		ids += checked[i].id + ";";
 	}
 	
-	$.getJSON("/_setbusytimes", 
-		{indices : ids},
+	$.getJSON("/_delete_meetings", 
+		{meeting_ids: ids},
 		function(data) {
 			window.location.href = "index";
-		}
-	);
+		});
+});
+
+
+$("#createProposalButton").click( function() {
+	window.location.href = "propose_meeting";
 });
 </script>
 </html>

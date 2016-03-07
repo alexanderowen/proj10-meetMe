@@ -1,0 +1,37 @@
+<!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML//EN">
+<html lang="en"> <head>
+<title>Respond using Manual Selection</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<!-- Include Required Prerequisites -->
+<script type="text/javascript" src="//cdn.jsdelivr.net/jquery/1/jquery.min.js"></script>
+<script type="text/javascript" src="//cdn.jsdelivr.net/momentjs/latest/moment.min.js"></script>
+<link rel="stylesheet" type="text/css" href="//cdn.jsdelivr.net/bootstrap/latest/css/bootstrap.css" />
+
+<!-- Include Date Range Picker -->
+<script type="text/javascript" src="//cdn.jsdelivr.net/bootstrap.daterangepicker/2/daterangepicker.js"></script>
+<link rel="stylesheet" type="text/css" href="//cdn.jsdelivr.net/bootstrap.daterangepicker/2/daterangepicker.css" />
+ 
+<!-- Our own style sheet -->
+<link rel="stylesheet" href="/static/css/busy.css" />
+
+</head>
+
+<div class="container">
+
+<h1>Respond to Meeting</h1>
+{% if session.current_meeting is defined %}
+  <h2>Currently responding to</h2>
+  Title: <input type="text" id="title" size=50 placeholder="Meeting title" value="{{ session.current_meeting.title }}"readonly><br><br>
+  Proposer: <input type="text" id="proposer" placeholder="Your name" value="{{ session.current_meeting.proposer_name }}" readonly><br><br>
+  Description: <textarea id="desc" rows=4 cols=50 placeholder="Details, location, etc. (optional)" readonly>{{ session.current_meeting.desc }}</textarea><br><br>
+
+  Date Range: <input type="text" id="daterange" size="24" value="{{ session.current_meeting.start_date }} - {{ session.current_meeting.end_date }}" readonly>
+
+  <br><br>
+  
+  Between <input type="time" id="begin_time" value="{{ session.current_meeting.start_time }}" readonly>  and  <input type="time" id="end_time" value="{{ session.current_meeting.end_time }}" readonly>
+<br><br>
+{% endif %}
+
+<hr>

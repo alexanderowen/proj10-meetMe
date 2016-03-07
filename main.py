@@ -5,6 +5,9 @@ from flask import url_for
 from flask import jsonify # For AJAX transactions
 import uuid
 
+# MongoDB Python module
+from pymongo import MongoClient
+
 import json
 import logging
 
@@ -24,6 +27,9 @@ from apiclient import discovery
 # Module to handle busy/free time scheduling
 from agenda import *
 
+#ObjectId for mongo records
+from bson.objectid import ObjectId
+
 # Favicon rendering
 import os
 
@@ -37,6 +43,15 @@ SCOPES = 'https://www.googleapis.com/auth/calendar.readonly'
 CLIENT_SECRET_FILE = CONFIG.GOOGLE_LICENSE_KEY  ## You'll need this
 APPLICATION_NAME = 'MeetMe class project'
 
+try: 
+    dbclient = MongoClient(CONFIG.MONGO_URL)
+    db = dbclient.meetings
+    proposal_collection = db.proposals
+    busy_collection = db.busy_times
+except:
+    print("Failure opening database.  Is Mongo running? Correct password?")
+    sys.exit(1)
+
 #############################
 #
 #  Pages (routed from URLs)
@@ -47,7 +62,57 @@ APPLICATION_NAME = 'MeetMe class project'
 @app.route("/index")
 def index():
   app.logger.debug("Entering index")
+  # Might not be necessary
+  init_session_variables()
+  
   return render_template('index.html')
+  
+def init_session_variables():
+	proposals = []
+	for record in proposal_collection.find( {"type":"proposal" } ):		
+		record['_id'] = str(record['_id'])
+		proposals.append(record)
+	flask.session['proposals'] = proposals	
+	
+	
+@app.route("/propose_meeting")
+def propose_meeting():
+	app.logger.debug("Entering propose_meeting")
+	return render_template('propose_meeting.html')
+
+@app.route("/respond")
+def respond():
+	app.logger.debug("Entering respond")
+	return render_template('respond.html')
+	
+@app.route("/view_meeting/<meeting_id>")
+def view_meeting(meeting_id):
+	app.logger.debug("Entering view_meeting")
+	app.logger.debug(meeting_id)
+	return render_template('view_meeting.html')	
+	
+@app.route("/respond_gcal")
+def respond_gcal():
+    app.logger.debug("Checking credentials for Google calendar access")
+    credentials = valid_credentials()
+    if not credentials:
+      app.logger.debug("Redirecting to authorization")
+      return flask.redirect(flask.url_for('oauth2callback'))
+
+    gcal_service = get_gcal_service(credentials)
+    app.logger.debug("Returned from get_gcal_service")
+    flask.session['calendars'] = list_calendars(gcal_service)
+    return render_template('respond_gcal.html')
+    
+@app.route("/respond_manual")
+def respond_manual():
+	app.logger.debug("Entering respond_manual")
+	return render_template("respond_manual.html")
+
+@app.route("/thanks")
+def thanks():
+	app.logger.debug("Entering thanks")
+	return render_template("thanks.html")
 
 @app.route("/choose")
 def choose():
@@ -68,27 +133,115 @@ def choose():
 
 #############################
 #
-#  AJAX request handler
+#  AJAX request handlers
 #
 #############################
+@app.route("/_get_names_times")
+def get_names_times():
+	app.logger.debug("Entering get_names_times, AJAX handler")
+	meeting_id = request.args.get("meeting_id", type=str)
+	meeting_id = ObjectId(meeting_id)
+	
+	names = []
+	
+	busy_times = busy_collection.find( {"proposal_ID": meeting_id} )
+	for record in busy_times:
+		if record['name'] not in names:
+			names.append(record['name'])
+	
+	flask.session['names'] = names
+	rslt = {"names": names} 
+	return jsonify(result=rslt)
+
+@app.route("/_submit_busy_times")
+def submit_busy_times():
+	app.logger.debug("Entering submit_busy_times, AJAX handler")
+	
+	id = ObjectId(flask.session['current_meeting']['_id'])
+	for cal in flask.session['busy_times']:
+		for busy_times in cal.values():
+			for busy_time in busy_times:
+			    record = {
+			    	"type": "busy_time",
+			    	"proposal_ID": id,
+			    	"start": busy_time[0],
+			    	"end": busy_time[1],
+			    	"name": flask.session['user_name']
+			    }
+			    busy_collection.insert_one(record)
+			    
+	return jsonify(result={})
+	
+
+@app.route("/_set_meeting")
+def set_meeting():
+	'''
+	Sets the flask session object
+	'''
+	app.logger.debug("Entering set_meeting, AJAX handler")
+	meeting_id = request.args.get("meeting_id", type=str)
+	
+	meeting_id = ObjectId(meeting_id)
+	meeting = proposal_collection.find_one( {"_id":meeting_id} )
+	meeting['_id'] = str(meeting['_id'])
+	flask.session['current_meeting'] = meeting
+	return jsonify(result={})
+
+@app.route("/_get_meeting_data")
+def get_meeting_data():
+	app.logger.debug("Entering get_meeting_data, AJAX handler")
+	meeting_id = request.args.get("meeting_id", type=str)
+	
+	#if 'current_meeting' in flask.session:
+	#	return flask.session['current_meeting']
+		
+	meeting_id = ObjectId(meeting_id)
+	meeting = proposal_collection.find_one( {"_id":meeting_id} )
+	meeting['_id'] = str(meeting['_id'])
+	flask.session['current_meeting'] = meeting
+	flask.session['daterange'] = meeting['start_date'] + " - " + meeting['end_date']
+	flask.session['begin_time'] = arrow.get(meeting['start_time'], "HH:mm").replace(tzinfo=tz.tzlocal()).isoformat().split("T")[1]
+	flask.session['end_time'] = arrow.get(meeting['end_time'], "HH:mm").replace(tzinfo=tz.tzlocal()).isoformat().split("T")[1]
+	return jsonify(result=meeting)
+
+@app.route("/_delete_meetings")
+def delete_meetings():
+	app.logger.debug("Entering delete_meetings, AJAX handler")
+	meeting_ids = request.args.get("meeting_ids", type=str)
+	# app.logger.debug("RECEIVED: ", meeting_ids)
+	meeting_ids = meeting_ids.split(";")
+	# Need to delete the meeting, and any busy times associated with it
+	for id in meeting_ids:
+		if id == "":
+			continue
+		id = ObjectId(id)
+		#proposal = proposal_collection.find( {"_id": id} )
+		proposal_collection.delete_one( {"_id": id} )
+		busy_collection.delete_many( {"proposal_ID": id} )
+	
+	return jsonify(result={})
+
 @app.route("/_setbusytimes")
 def find_busy():
 	'''
 	Receive AJAX request to find the busy times 
 	'''
-	indices = request.args.get("indices", type=str)
+	ids = request.args.get("calendar_ids", type=str)
+	user_name = request.args.get("name", type=str)
+	
+	flask.session['user_name'] = user_name
 	
 	credentials = valid_credentials()
 	gcal_service = get_gcal_service(credentials)
 	
-	busy_times, free_times = get_freebusy_times(gcal_service, indices)	
+	busy_times, free_times = get_freebusy_times(gcal_service, ids)	
 	flask.session['busy_times'] = busy_times	
 	flask.session['free_times'] = free_times
 	
 	return jsonify(result={})
 	
 	
-def get_freebusy_times(gcal_service, calendar_indices):
+def get_freebusy_times(gcal_service, calendar_ids):
 	'''
 	Sends requests to the Google Calendar API to determine the busy times for 
 	the given calendars (based on the indices). Uses those busy times to determine
@@ -114,14 +267,24 @@ def get_freebusy_times(gcal_service, calendar_indices):
 	busy_times = []
 	free_times = []
 	
+	calendar_ids = calendar_ids.split(";")
+	
 	start_date, end_date = flask.session['daterange'].split(" - ")
 	time_range_start = arrow.get(start_date + flask.session['begin_time'], "MM/DD/YYYYHH:mm:ssZZ")
 	time_range_end = arrow.get(start_date + flask.session['end_time'], "MM/DD/YYYYHH:mm:ssZZ")
 	end_date = arrow.get(end_date, "MM/DD/YYYY")
 
 	app.logger.debug("Sending freebusy requests to Google Cal")
-	for index in calendar_indices:
-		calendar = flask.session['calendars'][int(index)]
+	for id in calendar_ids:
+		if id == "":
+			continue
+			
+		# Not preferred
+		for cal in flask.session['calendars']:
+			if cal['id'] == id:
+				calendar = cal
+				break
+		#calendar = flask.session['calendars'][int(index)]
 		calendar_name = calendar['summary']
 		
 		busy = {calendar_name : []}
@@ -299,7 +462,7 @@ def oauth2callback():
     ## but for the moment I'll just log it and go back to
     ## the main screen
     app.logger.debug("Got credentials")
-    return flask.redirect(flask.url_for('choose'))
+    return flask.redirect(flask.url_for('respond_gcal'))
 
 #####
 #
@@ -339,6 +502,34 @@ def next_day(isotext):
     """
     as_arrow = arrow.get(isotext)
     return as_arrow.replace(days=+1).isoformat()
+
+@app.route('/create_meeting', methods=['POST'])
+def create_meeting():
+	app.logger.debug("Entering create_meeting")
+	title = request.form.get('title')
+	proposer = request.form.get('proposer')
+	desc = request.form.get('desc')
+	daterange = request.form.get('daterange')
+	begin_time = request.form.get('begin_time')
+	end_time = request.form.get('end_time')
+	
+	start_date, end_date = daterange.split(' - ')
+	
+	proposal = {
+		"type": "proposal",
+		"start_date": start_date,
+		"end_date": end_date,
+		"start_time": begin_time,
+		"end_time": end_time,
+		"proposer_name": proposer,
+		"desc": desc,
+		"title": title
+	}
+	proposal_collection.insert_one(proposal)
+	
+	# TODO: Redirect to next step
+	return flask.redirect(flask.url_for("index"))
+    
 
 ####
 #
