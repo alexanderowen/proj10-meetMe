@@ -62,18 +62,9 @@ except:
 @app.route("/index")
 def index():
   app.logger.debug("Entering index")
-  # Might not be necessary
-  init_session_variables()
   
+  init_proposals()  
   return render_template('index.html')
-  
-def init_session_variables():
-	proposals = []
-	for record in proposal_collection.find( {"type":"proposal" } ):		
-		record['_id'] = str(record['_id'])
-		proposals.append(record)
-	flask.session['proposals'] = proposals	
-	
 	
 @app.route("/propose_meeting")
 def propose_meeting():
@@ -82,64 +73,16 @@ def propose_meeting():
 
 @app.route("/respond/<meeting_id>")
 def respond(meeting_id):
-	app.logger.debug("Entering respond")
+	app.logger.debug("Entering respond")	
 	
-	meeting_id = ObjectId(meeting_id)
-	meeting = proposal_collection.find_one( {"_id":meeting_id} )
-	meeting['_id'] = str(meeting['_id'])
-	flask.session['current_meeting'] = meeting
-	flask.session['daterange'] = meeting['start_date'] + " - " + meeting['end_date']
-	flask.session['begin_time'] = arrow.get(meeting['start_time'], "HH:mm").replace(tzinfo=tz.tzlocal()).isoformat().split("T")[1]
-	flask.session['end_time'] = arrow.get(meeting['end_time'], "HH:mm").replace(tzinfo=tz.tzlocal()).isoformat().split("T")[1]
-	
+	init_meeting_variables(meeting_id)	
 	return render_template('respond.html')
 	
 @app.route("/view_meeting/<meeting_id>")
 def view_meeting(meeting_id):
 	app.logger.debug("Entering view_meeting")
 	
-	#if 'current_meeting' in flask.session:
-	#	return flask.session['current_meeting']
-		
-	meeting_id = ObjectId(meeting_id)
-	meeting = proposal_collection.find_one( {"_id":meeting_id} )
-	meeting['_id'] = str(meeting['_id'])
-	flask.session['current_meeting'] = meeting
-	flask.session['daterange'] = meeting['start_date'] + " - " + meeting['end_date']
-	flask.session['begin_time'] = arrow.get(meeting['start_time'], "HH:mm").replace(tzinfo=tz.tzlocal()).isoformat().split("T")[1]
-	flask.session['end_time'] = arrow.get(meeting['end_time'], "HH:mm").replace(tzinfo=tz.tzlocal()).isoformat().split("T")[1]
-	
-	names = []
-	
-	busy_times = busy_collection.find( {"proposal_ID": meeting_id} )
-	for record in busy_times:
-		if record['name'] not in names:
-			names.append(record['name'])
-	
-	flask.session['names'] = names
-	
-	busy = []
-	available = []
-	
-	busy_times = busy_collection.find( {"proposal_ID": meeting_id} )
-	for record in busy_times:
-		start = arrow.get(record['start']).replace(tzinfo=tz.tzlocal()).isoformat()
-		end = arrow.get(record['end']).replace(tzinfo=tz.tzlocal()).isoformat()
-		busy.append([start, end])
-	print(busy)
-	start_date, end_date = flask.session['daterange'].split(" - ")
-	time_range_start = arrow.get(start_date + flask.session['begin_time'], "MM/DD/YYYYHH:mm:ssZZ")
-	time_range_end = arrow.get(start_date + flask.session['end_time'], "MM/DD/YYYYHH:mm:ssZZ")
-	end_date = arrow.get(end_date, "MM/DD/YYYY")
-	
-	range = arrow.Arrow.span_range('day', time_range_start, end_date)
-	for day in range:
-		available.extend(determine_free_times(busy, time_range_start.isoformat(), time_range_end.isoformat()))
-		time_range_start = time_range_start.replace(days=+1)
-		time_range_end = time_range_end.replace(days=+1)
-	
-	flask.session['available_times'] = available
-	
+	init_meeting_variables(meeting_id)	
 	return render_template('view_meeting.html')	
 	
 @app.route("/respond_gcal")
@@ -163,49 +106,20 @@ def respond_manual():
 @app.route("/thanks")
 def thanks():
 	app.logger.debug("Entering thanks")
+	flask.session.clear()
 	return render_template("thanks.html")
 
-@app.route("/choose")
-def choose():
-    ## We'll need authorization to list calendars 
-    ## I wanted to put what follows into a function, but had
-    ## to pull it back here because the redirect has to be a
-    ## 'return' 
-    app.logger.debug("Checking credentials for Google calendar access")
-    credentials = valid_credentials()
-    if not credentials:
-      app.logger.debug("Redirecting to authorization")
-      return flask.redirect(flask.url_for('oauth2callback'))
-
-    gcal_service = get_gcal_service(credentials)
-    app.logger.debug("Returned from get_gcal_service")
-    flask.session['calendars'] = list_calendars(gcal_service)
-    return render_template('index.html')
 
 #############################
 #
 #  AJAX request handlers
 #
 #############################
-@app.route("/_get_names_times")
-def get_names_times():
-	app.logger.debug("Entering get_names_times, AJAX handler")
-	meeting_id = request.args.get("meeting_id", type=str)
-	meeting_id = ObjectId(meeting_id)
-	
-	names = []
-	
-	busy_times = busy_collection.find( {"proposal_ID": meeting_id} )
-	for record in busy_times:
-		if record['name'] not in names:
-			names.append(record['name'])
-	
-	flask.session['names'] = names
-	rslt = {"names": names} 
-	return jsonify(result=rslt)
-
 @app.route("/_submit_busy_times")
 def submit_busy_times():
+	'''
+	Submit the busy times currently in the flask session object
+	'''
 	app.logger.debug("Entering submit_busy_times, AJAX handler")
 	
 	id = ObjectId(flask.session['current_meeting']['_id'])
@@ -226,11 +140,13 @@ def submit_busy_times():
 
 @app.route("/_delete_meetings")
 def delete_meetings():
+	'''
+	Delete a proposal from the DB, as well as associated busy times
+	'''
 	app.logger.debug("Entering delete_meetings, AJAX handler")
 	meeting_ids = request.args.get("meeting_ids", type=str)
-	# app.logger.debug("RECEIVED: ", meeting_ids)
+	
 	meeting_ids = meeting_ids.split(";")
-	# Need to delete the meeting, and any busy times associated with it
 	for id in meeting_ids:
 		if id == "":
 			continue
@@ -256,6 +172,29 @@ def find_busy():
 	busy_times, free_times = get_freebusy_times(gcal_service, ids)	
 	flask.session['busy_times'] = busy_times	
 	flask.session['free_times'] = free_times
+	
+	return jsonify(result={})
+	
+@app.route("/_ignore_busy_times")
+def ignore_busy_times():
+	'''
+	Ignore busy times created from Google Calendar service
+	'''
+	app.logger.debug("Entering ignore_busy_times, AJAX handler")
+	ignore_times = request.args.get("busy_times", type=str)
+	
+	ignore_times = [ time.split("&") for time in ignore_times.split(";") ]
+	ignore_times.remove([""])
+	
+	for ignore_cal, start, end in ignore_times:
+		for cal in flask.session['busy_times']:
+			for cal_name in cal:
+				if cal_name != ignore_cal:
+					continue		
+				for time in cal[cal_name]:
+					if time[0] == start and time[1] == end:
+						cal[cal_name].remove([start,end])
+						break
 	
 	return jsonify(result={})
 	
@@ -485,45 +424,15 @@ def oauth2callback():
 
 #####
 #
-#  Option setting:  Buttons or forms that add some
-#     information into session state.  Don't do the
-#     computation here; use of the information might
-#     depend on what other information we have.
-#   Setting an option sends us back to the main display
-#      page, where we may put the new information to use. 
+#  POST routing methods. Receiving a lot of data from the user from fields
 #
 #####
 
-@app.route('/setrange', methods=['POST'])
-def setrange():
-    """
-    User chose a date range with the bootstrap daterange widget.
-    """
-    app.logger.debug("Entering setrange")  
-    daterange = request.form.get('daterange')
-    begintime = request.form.get('begintime')
-    endtime = request.form.get('endtime')
-    ## flask.flash("Setrange gave us '{}', '{}', '{}'".format(daterange, begintime, endtime))
-    
-    bt = arrow.get(begintime, "HH:mm").replace(tzinfo=tz.tzlocal()).isoformat().split("T")[1]
-    et = arrow.get(endtime, "HH:mm").replace(tzinfo=tz.tzlocal()).isoformat().split("T")[1]
-    
-    flask.session['daterange'] = daterange
-    flask.session['begin_time'] = bt
-    flask.session['end_time'] = et
-    
-    return flask.redirect(flask.url_for("choose"))
-
-
-def next_day(isotext):
-    """
-    ISO date + 1 day (used in query to Google calendar)
-    """
-    as_arrow = arrow.get(isotext)
-    return as_arrow.replace(days=+1).isoformat()
-
 @app.route('/create_meeting', methods=['POST'])
 def create_meeting():
+	'''
+	Create a meeting in the DB based on user filled out fields
+	'''
 	app.logger.debug("Entering create_meeting")
 	title = request.form.get('title')
 	proposer = request.form.get('proposer')
@@ -544,12 +453,44 @@ def create_meeting():
 		"desc": desc,
 		"title": title
 	}
-	proposal_collection.insert_one(proposal)
-	
-	# TODO: Redirect to next step
-	return flask.redirect(flask.url_for("index"))
+	meeting = proposal_collection.insert_one(proposal)
+	id = str(meeting.inserted_id)
+	return flask.redirect(flask.url_for("view_meeting", meeting_id=id))
     
-
+@app.route('/submit_manual_times', methods=['POST'])
+def submit_maunal_times():
+	'''
+	Check the date/time fields and create DB records based on them
+	'''
+	app.logger.debug("Entering submit_manual_times")
+	user_name = request.form.get('user_name')	
+	
+	date = 1
+	while date != None:
+		date_name = "date" + str(i)
+		start_name = "start_time" + str(i)
+		end_name = "end_time" + str(i)
+		date = request.form.get(date_name)
+		start_time = request.form.get(start_name)
+		end_time = request.form.get(end_name)
+		if date == None:
+			continue
+		
+		start_date_time = arrow.get(date + start_time, "MM/DD/YYYYHH:mm")
+		end_date_time = arrow.get(date + end_time, "MM/DD/YYYYHH:mm")
+		meeting_id = ObjectId(flask.session['current_meeting']['_id'])
+		
+		record = {
+			"type": "busy_time",
+			"proposal_ID": meeting_id,
+			"start": start_date_time.isoformat(),
+			"end": end_date_time.isoformat(),
+			"name": user_name
+		   }
+		busy_collection.insert_one(record)			
+	
+	return flask.redirect(flask.url_for("thanks"))
+	
 ####
 #
 #  Functions (NOT pages) that return some information
@@ -605,6 +546,70 @@ def cal_sort_key( cal ):
     else:
        primary_key = "X"
     return (primary_key, selected_key, cal["summary"])
+    
+
+def next_day(isotext):
+    """
+    ISO date + 1 day (used in query to Google calendar)
+    """
+    as_arrow = arrow.get(isotext)
+    return as_arrow.replace(days=+1).isoformat()
+    
+    
+def init_proposals():
+	'''
+	Initialize the flask session variable for 'proposals'. 
+	'''
+	proposals = []
+	for record in proposal_collection.find( {"type":"proposal" } ):		
+		record['_id'] = str(record['_id'])
+		proposals.append(record)
+	flask.session['proposals'] = proposals	
+	
+def init_meeting_variables(meeting_id):
+	'''
+	Initializes the flask session variables to display meeting details.
+	Includes current_meeting, daterange, begin and end time, names (of respondents), and
+	available times
+	'''
+	meeting_id = ObjectId(meeting_id)
+	meeting = proposal_collection.find_one( {"_id":meeting_id} )
+	meeting['_id'] = str(meeting['_id'])
+	flask.session['current_meeting'] = meeting
+	flask.session['daterange'] = meeting['start_date'] + " - " + meeting['end_date']
+	flask.session['begin_time'] = arrow.get(meeting['start_time'], "HH:mm").replace(tzinfo=tz.tzlocal()).isoformat().split("T")[1]
+	flask.session['end_time'] = arrow.get(meeting['end_time'], "HH:mm").replace(tzinfo=tz.tzlocal()).isoformat().split("T")[1]
+	
+	# Set the names of the respondents
+	names = []	
+	busy_times = busy_collection.find( {"proposal_ID": meeting_id} )
+	for record in busy_times:
+		if record['name'] not in names:
+			names.append(record['name'])	
+	flask.session['names'] = names
+	
+	# Set the available times based on the busy times
+	busy = []	
+	busy_times = busy_collection.find( {"proposal_ID": meeting_id} )
+	for record in busy_times:
+		start = arrow.get(record['start']).replace(tzinfo=tz.tzlocal()).isoformat()
+		end = arrow.get(record['end']).replace(tzinfo=tz.tzlocal()).isoformat()
+		busy.append([start, end])
+	
+	start_date, end_date = flask.session['daterange'].split(" - ")
+	time_range_start = arrow.get(start_date + flask.session['begin_time'], "MM/DD/YYYYHH:mm:ssZZ")
+	time_range_end = arrow.get(start_date + flask.session['end_time'], "MM/DD/YYYYHH:mm:ssZZ")
+	end_date = arrow.get(end_date, "MM/DD/YYYY")
+	
+	available = []	
+	range = arrow.Arrow.span_range('day', time_range_start, end_date)
+	for day in range:
+		available.extend(determine_free_times(busy, time_range_start.isoformat(), time_range_end.isoformat()))
+		time_range_start = time_range_start.replace(days=+1)
+		time_range_end = time_range_end.replace(days=+1)	
+	flask.session['available_times'] = available
+	
+	return None
     
     
 #################

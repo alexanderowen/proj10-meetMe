@@ -16,3 +16,11 @@ input, textarea {
 	color: black;
 }
 
+a {
+	color: #00FF00;
+}
+
+a:visited {
+	color: #FFFF00;
+}
+

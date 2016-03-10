@@ -20,36 +20,34 @@
 <h1>Meet Me Proposer Application</h1>
 <h4>Current Proposals</h4>
 
-{% if session.proposals is defined  %}
+{% if (session.proposals is defined) and (session.proposals is not equalto []) %}
   {% for proposal in session.proposals %}
-  <div class="row">  
-    <div class="col-md-4">
-        <input type="checkbox" id="{{ proposal._id }}">
-        <a href="view_meeting/{{ proposal._id }}">{{ proposal.title }}</a>
-    </div>
-  </div>  
+	  <div class="row">  
+		<div class="col-md-4">
+			<input type="checkbox" id="{{ proposal._id }}">
+			<a href="view_meeting/{{ proposal._id }}">{{ proposal.title }}</a>
+		</div>
+	  </div>  
   
-  {% if loop.last %}
-  <br>
-  <input type="submit" id="deleteProposalButton" value="Delete selected proposals">
-  <br>
-  {% endif %}  
+	  {% if loop.last %}
+		<br>
+		<input type="button" id="deleteProposalButton" value="Delete selected proposals">		
+	  {% endif %}  
   {% endfor %}
-{% else %}
-  
-    No meetings have been proposed.
-    <br>
-  
+{% else %}  
+    No meetings have been proposed.     
 {% endif %}
 
 
-<br>
-<input type="submit" id="createProposalButton" value="Propose new meeting">
+<br><br>
 
-
+<form action="propose_meeting">
+  <input type="submit" value="Propose new meeting">
+</form>
 
 </div>  <!-- end container (for bootstrap) -->
 </body> 
+
 
 <script>
 $("#deleteProposalButton").click( function() {
@@ -65,11 +63,6 @@ $("#deleteProposalButton").click( function() {
 		function(data) {
 			window.location.href = "index";
 		});
-});
-
-
-$("#createProposalButton").click( function() {
-	window.location.href = "propose_meeting";
 });
 </script>
 </html>

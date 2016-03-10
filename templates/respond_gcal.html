@@ -17,46 +17,54 @@
 
 </head>
 
+<body>
 <div class="container">
 
-<h1>Respond to Meeting</h1>
+<h1>Respond to Proposal</h1>
 {% if session.current_meeting is defined %}
-  <h2>Currently responding to</h2>
-  Title: <input type="text" id="title" size=50 placeholder="Meeting title" value="{{ session.current_meeting.title }}"readonly><br><br>
-  Proposer: <input type="text" id="proposer" placeholder="Your name" value="{{ session.current_meeting.proposer_name }}" readonly><br><br>
-  Description: <textarea id="desc" rows=4 cols=50 placeholder="Details, location, etc. (optional)" readonly>{{ session.current_meeting.desc }}</textarea><br><br>
+  <h4>Currently responding to</h4>
+  Title: <input type="text" id="title" size=50 placeholder="Meeting title" 
+          value="{{ session.current_meeting.title }}"readonly><br><br>
+  Proposer: <input type="text" id="proposer" placeholder="Your name" 
+             value="{{ session.current_meeting.proposer_name }}" readonly><br><br>
+  Description: <textarea id="desc" rows=4 cols=50 placeholder="Details, location, etc. (optional)" 
+                readonly>{{ session.current_meeting.desc }}</textarea><br><br>
 
-  Date Range: <input type="text" id="daterange" size="24" value="{{ session.current_meeting.start_date }} - {{ session.current_meeting.end_date }}" readonly>
+  Date Range: <input type="text" id="daterange" size="24" 
+               value="{{ session.current_meeting.start_date }} - {{ session.current_meeting.end_date }}" readonly>
 
   <br><br>
   
-  Between <input type="time" id="begin_time" value="{{ session.current_meeting.start_time }}" readonly>  and  <input type="time" id="end_time" value="{{ session.current_meeting.end_time }}" readonly>
-<br><br>
+  Between <input type="time" id="begin_time" value="{{ session.current_meeting.start_time }}" readonly>
+    and  <input type="time" id="end_time" value="{{ session.current_meeting.end_time }}" readonly>
+  <br>
+{% else %}
+  <h2>Oops. Something went wrong. <a link="/index">Go to home?</a></h2>
 {% endif %}
 
 <hr>
 
 {% if session.calendars is defined  %}
   Name: <input type="text" id="user_name" placeholder="Your name" 
-  value="{% if session.user_name is defined %} {{session.user_name}} {% endif %}">
-  <br><br>
+         value="{% if session.user_name is defined %} {{session.user_name}} {% endif %}">
+  <br>
 
   <h3>Please select the calendar(s) you would like to use: </h3>
   {% for cal in session.calendars if cal.selected %}
-  <div class="row">  
-    <div class="col-md-4">
-        <input type="checkbox" class="calendar" id="{{ cal.id }}"> {{ cal.summary }}   
-    </div>
-    {% if loop.index is divisibleby 3 %}
-      </div> <div class="row">
-    {% endif %}  
-  </div>  
+	  <div class="row">  
+		<div class="col-md-4">
+			<input type="checkbox" class="calendar" id="{{ cal.id }}">
+			<label for="{{ cal.id }}"> {{ cal.summary }} </label>        
+		</div>
+		{% if loop.index is divisibleby 3 %}
+		  </div> <div class="row">
+		{% endif %}  
+	  </div>  
   
-  {% if loop.last %}
-  <br>
-  <input type="submit" id="submit_calendars" value="I want to use these calendars">
-  {% endif %}
-  
+	  {% if loop.last %}
+	  <br>
+	  <input type="button" id="submit_calendars" value="I want to use these calendars">
+	  {% endif %}  
   {% endfor %}
 {% endif %}
 
@@ -80,16 +88,11 @@
           </div>
         </div>
       {% else %}
-        {% for conflict in conflicts %}  
+        {% for start_time, end_time in conflicts %}  
           <div class="row">
-            <div class="col-md-4">
-      	  {% for time in conflict %} 
-      	    {% if loop.first %}       
-             <input type="checkbox" class="busy_time {{name}}" id="{{time}}"> {{ time | fmtdatetime }} -
-            {% else %}
-             {{ time | fmttime }} 
-            {% endif %}       
-          {% endfor %}
+            <div class="col-md-4">     	        	          
+             <input type="checkbox" class="busy_time {{name}}" id="{{name}}&{{start_time}}&{{end_time}}"> 
+             <label for="{{name}}&{{start_time}}&{{end_time}}">{{ start_time | fmtdatetime }} - {{ end_time | fmttime }}</label>             
             </div>
           </div>
       {% endfor %}
@@ -100,9 +103,11 @@
   <input type="submit" id="ignore_times" value="Ignore selected busy times">
   <br><br>
   <input type="submit" id="submit_times" value="Submit these busy times">
+
 {% endif %}
 
 </div> <!--container-->
+</body>
 
 <script>
 
@@ -124,11 +129,32 @@ $("#submit_calendars").click( function() {
 	);
 });
 
+// Get the ids of the busy times selected, send to the server
 $("#ignore_times").click(function() {
-	//THIS
+	var checked = $("input:checked" || ".busy_time");
+	if (checked == []) { // No times checked
+		return;
+	}
+	
+	var times = "";
+	for (var i = 0; i < checked.length; i++) {
+		times += checked[i].id + ";";
+	}
+	
+	$.getJSON("/_ignore_busy_times",
+		{busy_times: times},
+		function(date) {
+			window.location.href = "respond_gcal";
+		});
 });
 
+// Submit the current busy times as the final answer
 $("#submit_times").click(function() {
+	if ($("#user_name").val().trim() == "") {
+		alert("Please enter a name before submission.");
+		return;
+	}
+	
 	$.getJSON("/_submit_busy_times", 
 	{},
 	function(data) {
@@ -137,3 +163,5 @@ $("#submit_times").click(function() {
 
 });
 </script>
+
+</html>

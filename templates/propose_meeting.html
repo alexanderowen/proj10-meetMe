@@ -26,8 +26,8 @@
 
 <form action="/create_meeting" method="post">
 
-  Title: <input type="text" name="title" placeholder="Meeting title"></input><br><br>
-  Name: <input type="text" name="proposer" placeholder="Your name"></input><br><br>
+  Title: <input type="text" name="title" size=50 placeholder="Meeting title"><br><br>
+  Name: <input type="text" name="proposer" placeholder="Your name"><br><br>
   Description: <textarea name="desc" rows=4 cols=50 placeholder="Details, location, etc. (optional)"></textarea><br><br>
 
   Date Range: <input type="text" name="daterange" size="12"
@@ -55,21 +55,13 @@
   </script>
   <br><br>
   
-  Between <input type="time" name="begin_time"></input>  and  <input type="time" name="end_time"></input>
+  Between <input type="time" name="begin_time"> and  <input type="time" name="end_time">
 <br><br>
 
-<label>
-<input type="submit" value="Submit meeting details"></input>
-</label>
+
+<input type="submit" value="Submit meeting details">
 </form>
-
-
-
 
 </div>  <!-- end container (for bootstrap) -->
 </body> 
-
-<script>
-
-</script>
 </html>

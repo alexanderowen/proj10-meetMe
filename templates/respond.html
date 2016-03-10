@@ -21,10 +21,8 @@
 <body>
 <div class="container">
 
-<h1>Respond to a meeting</h1>
+<h1>Respond to Proposal</h1>
 <h4>You have been invited to a meeting!</h4>
-
-
 
   Title: <input type="text" id="title" size=50 value="{{session.current_meeting.title}}" readonly><br><br>
   Proposer: <input type="text" id="proposer" value="{{session.current_meeting.proposer_name}}" readonly><br><br>
@@ -35,25 +33,24 @@
   <br><br>
   
   Between <input type="time" id="begin_time" value="{{session.current_meeting.start_time}}" readonly>  and  <input type="time" id="end_time" value="{{session.current_meeting.end_time}}" readonly>
-<br><br>
-<br><br>
+<br>
+
 <hr>
 
-<label>
-<input type="submit" id="useGcal" value="Respond using Google Calendar">
+<input type="button" id="useGcal" value="Respond using Google Calendar">
 <br><br>
-<input type="submit" id="manualSelection" value="Respond by manual selection">
-</label>
-
-
+<input type="button" id="manualSelection" value="Respond by manual selection">
 
 </div>  <!-- end container (for bootstrap) -->
 </body> 
 
 <script>
 $("#useGcal").click(function() {
-	// Almost probably a security issue
 	window.location.href = "../respond_gcal";
+});
+
+$("#manualSelection").click(function() {
+	window.location.href = "../respond_manual"
 });
 </script>
 
