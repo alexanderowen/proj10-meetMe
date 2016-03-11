@@ -70,6 +70,12 @@ def index():
 def propose_meeting():
 	app.logger.debug("Entering propose_meeting")
 	return render_template('propose_meeting.html')
+	
+@app.route("/proposal_created/<meeting_id>")
+def proposal_created(meeting_id):
+	app.logger.debug("Entering proposal_created")
+	flask.session['meeting_id'] = meeting_id
+	return render_template("proposal_created.html")
 
 @app.route("/respond/<meeting_id>")
 def respond(meeting_id):
@@ -455,7 +461,7 @@ def create_meeting():
 	}
 	meeting = proposal_collection.insert_one(proposal)
 	id = str(meeting.inserted_id)
-	return flask.redirect(flask.url_for("view_meeting", meeting_id=id))
+	return flask.redirect(flask.url_for("proposal_created", meeting_id=id))
     
 @app.route('/submit_manual_times', methods=['POST'])
 def submit_maunal_times():
@@ -475,7 +481,6 @@ def submit_maunal_times():
 		start_time = request.form.get(start_name)
 		end_time = request.form.get(end_name)
 		
-		print(date)
 		if date == "":
 			break
 		
