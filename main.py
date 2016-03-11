@@ -466,6 +466,7 @@ def submit_maunal_times():
 	user_name = request.form.get('user_name')	
 	
 	date = 1
+	i = 0
 	while date != None:
 		date_name = "date" + str(i)
 		start_name = "start_time" + str(i)
@@ -473,8 +474,10 @@ def submit_maunal_times():
 		date = request.form.get(date_name)
 		start_time = request.form.get(start_name)
 		end_time = request.form.get(end_name)
-		if date == None:
-			continue
+		
+		print(date)
+		if date == "":
+			break
 		
 		start_date_time = arrow.get(date + start_time, "MM/DD/YYYYHH:mm")
 		end_date_time = arrow.get(date + end_time, "MM/DD/YYYYHH:mm")
@@ -488,7 +491,7 @@ def submit_maunal_times():
 			"name": user_name
 		   }
 		busy_collection.insert_one(record)			
-	
+		i += 1
 	return flask.redirect(flask.url_for("thanks"))
 	
 ####
