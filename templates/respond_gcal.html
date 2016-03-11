@@ -45,6 +45,8 @@
 <hr>
 
 {% if session.calendars is defined  %}
+  <h3>Enter your name below: </h3>
+
   Name: <input type="text" id="user_name" placeholder="Your name" 
          value="{% if session.user_name is defined %} {{session.user_name}} {% endif %}">
   <br>
@@ -69,7 +71,8 @@
 {% endif %}
 
 {% if session.busy_times is defined  %}
-<h3>Here are your busy times</h3>
+<h3>Here are your busy times. If you would like to ignore one of these times, check the checkbox and hit ignore.
+    Otherwise, hit submit. </h3>
   {% for cal in session.busy_times %}
     {% for name, conflicts in cal.items() %}
     
